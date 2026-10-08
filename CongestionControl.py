@@ -9,6 +9,10 @@ class CongestionControl:
         self.cwnd = MSS
         self.ssthresh = None
 
-    def get_cwnd(self): bytes 
+    # parte 1.2
+    def get_cwnd(self) -> bytes: 
+        return self.cwnd
+
+    
 
     
