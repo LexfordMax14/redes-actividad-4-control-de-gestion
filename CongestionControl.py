@@ -13,6 +13,10 @@ class CongestionControl:
     def get_cwnd(self) -> bytes: 
         return self.cwnd
 
+    # parte 1.3
+    def get_MSS_in_cwnd(self) -> int:
+        return self.cwnd // self.MSS    
+
     
 
     
