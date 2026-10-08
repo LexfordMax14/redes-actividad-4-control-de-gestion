@@ -36,4 +36,13 @@ class CongestionControl:
             self.cwnd = self.MSS
             self.current_state = "slow start" # en slow star el estado no cambia
 
+    #parte 1.6 
+    def is_state_slow_start(self) -> bool:
+        return self.current_state == "slow start"
+
+    def is_state_congestion_avoidance(self) -> bool:
+        return self.current_state == "congestion avoidance"
+
+    def get_ssthresh(self) -> int:
+        return self.ssthresh
     
