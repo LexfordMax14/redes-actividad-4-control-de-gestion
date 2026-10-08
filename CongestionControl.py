@@ -1,4 +1,6 @@
 # constructor parte 1.1
+from numpy import byte
+
 
 class CongestionControl:
     def __init__(self, MSS: int):
@@ -8,7 +10,7 @@ class CongestionControl:
         self.ssthresh = None
 
     # parte 1.2
-    def get_cwnd(self) -> int: 
+    def get_cwnd(self) -> bytes: 
         return self.cwnd
 
     # parte 1.3
