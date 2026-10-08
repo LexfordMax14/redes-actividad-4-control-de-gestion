@@ -11,10 +11,10 @@ class CongestionControl:
 
     # parte 1.2
     def get_cwnd(self) -> bytes: 
-        return self.cwnd
+        return self.cwnd.to_bytes()
 
     # parte 1.3
-    def get_MSS_in_cwnd(self) -> int:
+    def get_MSS_in_cwnd(self) -> int    :
         return self.cwnd // self.MSS
 
     #parte 1.4
@@ -26,5 +26,4 @@ class CongestionControl:
                 self.current_state = "congestion avoidance"
 
         elif estado == "congestion avoidance":
-            self.cwnd += (1 / self.get_MSS_in_cwnd())
-            
+            self.cwnd += (1 / self.get_MSS_in_cwnd())   
