@@ -1,5 +1,5 @@
 # constructor parte 1.1
-from numpy import byte
+from numpy import bytes
 
 
 class CongestionControl:
@@ -15,8 +15,16 @@ class CongestionControl:
 
     # parte 1.3
     def get_MSS_in_cwnd(self) -> int:
-        return self.cwnd // self.MSS    
+        return self.cwnd // self.MSS
 
-    
+    #parte 1.4
+    def event_ack_recieved(self):
+        estado = self.current_state
+        if estado == "slow start":
+            self.cwnd += self.MSS
+            if self.cwnd >= self.ssthresh:
+                self.current_state = "congestion avoidance"
 
-    
+        elif estado == "congestion avoidance":
+            self.cwnd += (1 / self.get_MSS_in_cwnd())
+            
