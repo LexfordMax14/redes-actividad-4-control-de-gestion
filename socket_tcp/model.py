@@ -2,6 +2,9 @@ import random
 import socket
 import time
 
+from material_docente.slidingWindowCC import SlidingWindowCC
+from material_docente.socketUDP import SocketUDP
+
 
 class PaqueteTCP:
 	"""Estructura de 7 + 16 Bytes que almacena headers TCP.
@@ -54,6 +57,7 @@ class SocketTCP:
 		self._recv_seq = -1
 		self._handshake_seq = None
 		self._pending_segment = None
+		self._gbn_next_seq = None
 
 	@staticmethod
 	def parse_segment(segment_bytes: bytes) -> PaqueteTCP:
@@ -216,10 +220,107 @@ class SocketTCP:
 	def send(self, message: bytes, mode="stop_and_wait"):
 		if mode == "stop_and_wait":
 			return self.send_using_stop_and_wait(message)
+		if mode == "go_back_n":
+			return self.send_using_go_back_n(message)
+		raise ValueError(f"Modo ARQ no soportado: {mode}")
 
 	def recv(self, buff_size: int, mode="stop_and_wait") -> bytes:
 		if mode == "stop_and_wait":
 			return self.recv_using_stop_and_wait(buff_size)
+		if mode == "go_back_n":
+			return self.recv_using_go_back_n(buff_size)
+		raise ValueError(f"Modo ARQ no soportado: {mode}")
+
+	# --- Go-Back-N: ventana fija de 8 segmentos
+
+	def send_using_go_back_n(self, message: bytes):
+		segment_size = 16
+		data_list = [len(message).to_bytes(4)]
+		data_list += [message[i:i + segment_size] for i in range(0, len(message), segment_size)]
+		window_size = 8
+		data_window = SlidingWindowCC(window_size, data_list, self._seq)
+		udp = SocketUDP()
+		udp.socket_udp.close()
+		udp.socket_udp = self._socket
+		previous_timeout = self._socket.gettimeout()
+		self._socket.setblocking(False)
+		udp.settimeout(0.5)
+		sent = set()
+		last_sent = self._seq - 1
+		try:
+			while data_window.get_data(0) is not None:
+				for index in range(data_window.window_size):
+					seq = data_window.get_sequence_number(index)
+					if seq is not None and seq not in sent:
+						packet = PaqueteTCP(seq=seq, body=data_window.get_data(index))
+						udp.sendto(self.create_segment(packet), self._remote_address)
+						sent.add(seq)
+						last_sent = max(last_sent, seq)
+				try:
+					binary, address = udp.recvfrom(23)
+				except TimeoutError:
+					udp.stop_timer()
+					sent.clear()  # Retransmitir desde el m?s antiguo.
+					continue
+				ack = self.parse_segment(binary)
+				if address != self._remote_address:
+					continue
+				if ack.syn and ack.ack and ack.seq == self._handshake_seq - 1:
+					packet = PaqueteTCP(ack=1, seq=self._handshake_seq)
+					self._socket.sendto(self.create_segment(packet), address)
+					continue
+				if (not ack.ack or ack.syn or ack.fin
+					or ack.seq < data_window.get_sequence_number(0) or ack.seq > last_sent
+					or ack.seq not in data_window.seq_list):
+					continue
+				# El ACK confirma este segmento y todos los anteriores.
+				while data_window.get_data(0) is not None and data_window.get_sequence_number(0) <= ack.seq:
+					data_window.move_window(1)
+				sent = {seq for seq in sent if seq > ack.seq}
+			self._seq += sum(map(len, data_list))
+		finally:
+			udp.stop_timer()
+			self._socket.settimeout(previous_timeout)
+
+	def recv_using_go_back_n(self, buff_size: int) -> bytes:
+		if buff_size <= 0:
+			raise ValueError("buff_size debe ser mayor que cero")
+		if self._gbn_next_seq is None:
+			self._gbn_next_seq = self._seq
+		reading_length = self._recv_remaining == 0 and not self._recv_buffer
+		while reading_length or (len(self._recv_buffer) < buff_size and self._recv_remaining > 0):
+			if self._pending_segment is not None:
+				binary, address = self._pending_segment
+				self._pending_segment = None
+			else:
+				binary, address = self._socket.recvfrom(23)
+			packet = self.parse_segment(binary)
+			if address != self._remote_address:
+				continue
+			if packet.fin == 1 and packet.ack == 0:
+				self.recv_close(packet)
+				return b""
+			if packet.ack != 0 or packet.syn != 0 or not packet.body:
+				continue
+			if packet.seq == self._gbn_next_seq:
+				if reading_length:
+					if len(packet.body) != 4:
+						continue
+					self._recv_remaining = int.from_bytes(packet.body)
+					reading_length = False
+				else:
+					self._recv_buffer += packet.body
+					self._recv_remaining -= len(packet.body)
+				self._recv_seq = packet.seq
+				self._gbn_next_seq += len(packet.body)
+				self._seq = self._gbn_next_seq
+			# Descarta datos fuera de orden y repite el último ACK acumulativo.
+			if self._recv_seq >= 0:
+				ack = PaqueteTCP(ack=1, seq=self._recv_seq)
+				self._socket.sendto(self.create_segment(ack), address)
+		data = self._recv_buffer[:buff_size]
+		self._recv_buffer = self._recv_buffer[buff_size:]
+		return data
 
 	# --- Funciones del Stop & Wait
 
