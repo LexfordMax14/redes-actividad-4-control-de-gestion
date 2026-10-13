@@ -276,6 +276,8 @@ class SocketTCP:
 				try:
 					binary, address = udp.recvfrom(23)
 				except TimeoutError:
+					if self.congestion_control_on:
+						self.congestion_controler.event_timeout()
 					udp.stop_timer()
 					sent.clear()  # Retransmitir desde el m?s antiguo.
 					continue
@@ -291,6 +293,8 @@ class SocketTCP:
 					or ack.seq not in data_window.seq_list):
 					continue
 				# El ACK confirma este segmento y todos los anteriores.
+				if self.congestion_control_on:
+					self.congestion_controler.event_ack_received()
 				while data_window.get_data(0) is not None and data_window.get_sequence_number(0) <= ack.seq:
 					data_window.move_window(1)
 				sent = {seq for seq in sent if seq > ack.seq}
