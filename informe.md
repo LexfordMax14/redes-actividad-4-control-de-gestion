@@ -9,3 +9,7 @@ Ambos usan números de secuencia, ACKs (acuses de recibo) y timeouts para detect
 ### 2. ¿Cambia recv al usar SocketUDP y SlidingWindowCC en Stop & Wait?
 
 La lógica de recepción de Stop & Wait se mantiene: recibir el segmento esperado, entregar sus datos una sola vez y enviar el ACK correspondiente, confirmando también los duplicados sin volver a entregar sus datos. SlidingWindowCC organiza la ventana del emisor y SocketUDP facilita el manejo de timers; su uso no exige por sí solo cambiar esa lógica del receptor. Pueden necesitarse ajustes en las llamadas al socket y en el manejo de timers al integrar SocketUDP.
+
+## Parte 3: ventana inicial de congestión
+
+Con el control de congestión activado, `window_size` inicialmente vale **1 segmento**, porque `CongestionControl` comienza en slow start con `cwnd = 1 MSS`. Como `MSS = 8 bytes`, la cantidad de segmentos completos que caben en la ventana es `cwnd / MSS = 8 / 8 = 1`. El modo debug confirmó este valor. Con el control desactivado, se mantiene la ventana fija de 8 segmentos.

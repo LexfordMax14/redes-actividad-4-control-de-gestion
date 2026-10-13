@@ -50,6 +50,7 @@ class SocketTCP:
 	def __init__(self):
 		self.congestion_controler = CongestionControl(MSS=8)
 		self.congestion_control_on = False
+		self.debug = False
 		self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self._local_address = None
 		self._remote_address = None
@@ -64,6 +65,9 @@ class SocketTCP:
 
 	def set_congestion_control(self, enabled: bool):
 		self.congestion_control_on = enabled
+
+	def set_debug(self, enabled: bool):
+		self.debug = enabled
 
 	@staticmethod
 	def parse_segment(segment_bytes: bytes) -> PaqueteTCP:
@@ -247,6 +251,11 @@ class SocketTCP:
 		if self.congestion_control_on:
 			window_size = self.congestion_controler.get_MSS_in_cwnd()
 		data_window = SlidingWindowCC(window_size, data_list, self._seq)
+		if self.debug:
+			print(f"[DEBUG] control={self.congestion_control_on}, "
+				f"cwnd={self.congestion_controler.get_cwnd()} bytes, "
+				f"MSS={segment_size} bytes, window_size={window_size} segmentos")
+			print(data_window)
 		udp = SocketUDP()
 		udp.socket_udp.close()
 		udp.socket_udp = self._socket
