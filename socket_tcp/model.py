@@ -211,13 +211,15 @@ class SocketTCP:
 		finally:
 			self._socket.close()
 
-	# --- Métodos pendientes de selección del protocolo ARQ
+	# --- Selección del protocolo ARQ
 
-	def send(self, message: bytes):
-		pass
+	def send(self, message: bytes, mode="stop_and_wait"):
+		if mode == "stop_and_wait":
+			return self.send_using_stop_and_wait(message)
 
-	def recv(self, buff_size: int) -> bytes:
-		pass
+	def recv(self, buff_size: int, mode="stop_and_wait") -> bytes:
+		if mode == "stop_and_wait":
+			return self.recv_using_stop_and_wait(buff_size)
 
 	# --- Funciones del Stop & Wait
 
