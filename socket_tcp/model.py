@@ -240,7 +240,7 @@ class SocketTCP:
 	# --- Go-Back-N: ventana fija de 8 segmentos
 
 	def send_using_go_back_n(self, message: bytes):
-		segment_size = 16
+		segment_size = self.congestion_controler.MSS
 		data_list = [len(message).to_bytes(4)]
 		data_list += [message[i:i + segment_size] for i in range(0, len(message), segment_size)]
 		window_size = 8
