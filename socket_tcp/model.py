@@ -50,7 +50,7 @@ class SocketTCP:
 	def __init__(self):
 		self.congestion_controler = CongestionControl(MSS=8)
 		self.congestion_control_on = False
-		self.debug = False
+		self.debug = True
 		self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self._local_address = None
 		self._remote_address = None
@@ -278,6 +278,11 @@ class SocketTCP:
 				except TimeoutError:
 					if self.congestion_control_on:
 						self.congestion_controler.event_timeout()
+						window_size = self.congestion_controler.get_MSS_in_cwnd()
+						data_window.update_window_size(window_size)
+						if self.debug:
+							print(f"[DEBUG] timeout: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}")
+							print(data_window)
 					udp.stop_timer()
 					sent.clear()  # Retransmitir desde el m?s antiguo.
 					continue
@@ -292,12 +297,17 @@ class SocketTCP:
 					or ack.seq < data_window.get_sequence_number(0) or ack.seq > last_sent
 					or ack.seq not in data_window.seq_list):
 					continue
-				# El ACK confirma este segmento y todos los anteriores.
-				if self.congestion_control_on:
-					self.congestion_controler.event_ack_received()
+				# También avanza si el ACK supera el extremo de una ventana reducida.
 				while data_window.get_data(0) is not None and data_window.get_sequence_number(0) <= ack.seq:
 					data_window.move_window(1)
 				sent = {seq for seq in sent if seq > ack.seq}
+				if self.congestion_control_on:
+					self.congestion_controler.event_ack_received()
+					window_size = self.congestion_controler.get_MSS_in_cwnd()
+					data_window.update_window_size(window_size)
+					if self.debug:
+						print(f"[DEBUG] ACK {ack.seq}: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}")
+						print(data_window)
 			self._seq += sum(map(len, data_list))
 		finally:
 			udp.stop_timer()
