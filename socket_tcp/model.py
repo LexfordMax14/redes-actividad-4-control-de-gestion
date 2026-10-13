@@ -2,6 +2,7 @@ import random
 import socket
 import time
 
+from CongestionControl import CongestionControl
 from material_docente.slidingWindowCC import SlidingWindowCC
 from material_docente.socketUDP import SocketUDP
 
@@ -47,6 +48,7 @@ class PaqueteTCP:
 
 class SocketTCP:
 	def __init__(self):
+		self.congestion_controler = CongestionControl(MSS=8)
 		self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 		self._local_address = None
 		self._remote_address = None
