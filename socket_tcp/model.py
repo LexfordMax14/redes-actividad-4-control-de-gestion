@@ -244,6 +244,8 @@ class SocketTCP:
 		data_list = [len(message).to_bytes(4)]
 		data_list += [message[i:i + segment_size] for i in range(0, len(message), segment_size)]
 		window_size = 8
+		if self.congestion_control_on:
+			window_size = self.congestion_controler.get_MSS_in_cwnd()
 		data_window = SlidingWindowCC(window_size, data_list, self._seq)
 		udp = SocketUDP()
 		udp.socket_udp.close()
