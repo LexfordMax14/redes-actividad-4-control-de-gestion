@@ -198,8 +198,9 @@ class SocketTCP:
 					fin = packet
 					break
 				if (packet.fin == 0 and packet.ack == 0
-					and packet.syn == 0 and packet.seq == self._recv_seq):
-					ack = PaqueteTCP(ack=1, seq=packet.seq)
+					and packet.syn == 0 and (packet.seq == self._recv_seq
+						or (self._gbn_next_seq is not None and packet.seq < self._recv_seq))):
+					ack = PaqueteTCP(ack=1, seq=self._recv_seq)
 					self._socket.sendto(self.create_segment(ack), address)
 
 		x = fin.seq
@@ -254,7 +255,8 @@ class SocketTCP:
 		if self.debug:
 			print(f"[DEBUG] control={self.congestion_control_on}, "
 				f"cwnd={self.congestion_controler.get_cwnd()} bytes, "
-				f"MSS={segment_size} bytes, window_size={window_size} segmentos")
+				f"MSS={segment_size} bytes, window_size={window_size} segmentos, "
+				f"estado={self.congestion_controler.current_state}, ssthresh={self.congestion_controler.get_ssthresh()}")
 			print(data_window)
 		udp = SocketUDP()
 		udp.socket_udp.close()
@@ -281,7 +283,7 @@ class SocketTCP:
 						window_size = self.congestion_controler.get_MSS_in_cwnd()
 						data_window.update_window_size(window_size)
 						if self.debug:
-							print(f"[DEBUG] timeout: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}")
+							print(f"[DEBUG] timeout: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}, estado={self.congestion_controler.current_state}, ssthresh={self.congestion_controler.get_ssthresh()}")
 							print(data_window)
 					udp.stop_timer()
 					sent.clear()  # Retransmitir desde el m?s antiguo.
@@ -306,7 +308,7 @@ class SocketTCP:
 					window_size = self.congestion_controler.get_MSS_in_cwnd()
 					data_window.update_window_size(window_size)
 					if self.debug:
-						print(f"[DEBUG] ACK {ack.seq}: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}")
+						print(f"[DEBUG] ACK {ack.seq}: cwnd={self.congestion_controler.get_cwnd()} bytes, window_size={window_size}, estado={self.congestion_controler.current_state}, ssthresh={self.congestion_controler.get_ssthresh()}")
 						print(data_window)
 			self._seq += sum(map(len, data_list))
 		finally:
