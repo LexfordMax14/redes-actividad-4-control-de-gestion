@@ -30,12 +30,12 @@ class CongestionControl:
     #parte 1.5
     def event_timeout(self):
         estado = self.current_state
-        if estado == "congestion avoidance" or estado == "slow start": 
+        if estado == "congestion avoidance" or estado == "slow start":
             self.ssthresh = int(self.cwnd // 2)
             self.cwnd = self.MSS
             self.current_state = "slow start" # en slow star el estado no cambia
 
-    #parte 1.6 
+    #parte 1.6
     def is_state_slow_start(self) -> bool:
         return self.current_state == "slow start"
 
@@ -45,4 +45,4 @@ class CongestionControl:
     def get_ssthresh(self) -> int | None:
         return self.ssthresh
 
-    
+
