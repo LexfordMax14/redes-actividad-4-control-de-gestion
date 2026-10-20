@@ -1,44 +1,39 @@
 # Informe: control de congestión
 
-## Parte 2: preguntas previas
+- Héctor Bonilla
+- Lázaro Narváez
 
-### 1. ¿Por qué sirve Stop & Wait como base para Go-Back-N? ¿Qué similitud tienen?
+## Preguntas previas
 
-Ambos usan números de secuencia, ACKs (acuses de recibo) y timeouts para detectar pérdidas y retransmitir datos. Por eso se puede reutilizar como base el manejo de segmentos, confirmaciones y retransmisiones de Stop & Wait. Stop & Wait mantiene un solo segmento pendiente de confirmación; Go-Back-N permite varios mediante una ventana de envío y usa ACKs acumulativos. Ante un timeout, Go-Back-N retransmite desde el segmento pendiente más antiguo.
+**¿Por qué usar Stop & Wait como base para Go-Back-N?** Ambos usan secuencias, ACKs, timeouts y retransmisiones. Go-Back-N extiende esa lógica con una ventana de varios segmentos pendientes y ACKs acumulativos.
 
-### 2. ¿Cambia recv al usar SocketUDP y SlidingWindowCC en Stop & Wait?
+**¿Cambia recv al usar SocketUDP y SlidingWindowCC en Stop & Wait?** Su lógica se mantiene: recibir el segmento esperado, entregar sus datos una sola vez y confirmar duplicados. Las clases facilitan los timers y la ventana del emisor; solo pueden requerir adaptar las llamadas al socket.
 
-La lógica de recepción de Stop & Wait se mantiene: recibir el segmento esperado, entregar sus datos una sola vez y enviar el ACK correspondiente, confirmando también los duplicados sin volver a entregar sus datos. SlidingWindowCC organiza la ventana del emisor y SocketUDP facilita el manejo de timers; su uso no exige por sí solo cambiar esa lógica del receptor. Pueden necesitarse ajustes en las llamadas al socket y en el manejo de timers al integrar SocketUDP.
+**¿Cuál es la ventana inicial con control?** Un segmento, porque `cwnd = MSS = 8 bytes`. Sin control se mantiene una ventana de 8 segmentos.
 
-## Parte 3: ventana inicial de congestión
+## Pruebas y comportamiento observado
 
-Con el control de congestión activado, `window_size` inicialmente vale **1 segmento**, porque `CongestionControl` comienza en slow start con `cwnd = 1 MSS`. Como `MSS = 8 bytes`, la cantidad de segmentos completos que caben en la ventana es `cwnd / MSS = 8 / 8 = 1`. El modo debug confirmó este valor. Con el control desactivado, se mantiene la ventana fija de 8 segmentos.
+Se ejecutaron las pruebas en Ubuntu/WSL2 con Python 3.12.3. Pasaron las 25 comprobaciones docentes con MSS de 1, 4, 7, 8 y 16 bytes. También funcionaron las lecturas parciales, el mensaje vacío y la recuperación al perder el último ACK. Los 22 experimentos de transferencia entregaron archivos íntegros y cerraron correctamente las conexiones.
 
-## Pruebas finales
+Sin pérdidas, el archivo de 2048 B tardó 0,162 s con control y 0,025 s sin control. Ambos intercambiaron 257 segmentos de datos y 257 ACKs. Con control no hubo timeouts espontáneos: la ventana creció en slow start y `ssthresh` permaneció en `None`.
 
-Se utilizó un cliente y un servidor simples en localhost mediante `send` y `recv` con `mode="go_back_n"`. Los archivos binarios se leyeron y escribieron en una carpeta temporal y se compararon byte por byte; se recibieron en bloques de hasta 127 bytes. Todos los archivos llegaron íntegros y las conexiones se cerraron correctamente.
+Con pérdidas, cada timeout redujo `ssthresh` a la mitad de la `cwnd` anterior y reinició `cwnd` a 8 bytes. Al alcanzar el umbral se pasó a congestion avoidance, como muestra el debug.
 
-### Evolución de la ventana
+## Comparación con 20% de pérdida
 
-Sin pérdida inducida, el archivo de 2048 B tardó 0,395 s, con 257 segmentos de datos (incluyendo el segmento de longitud) y 257 ACKs. No se observaron timeouts espontáneos en esa ejecución. La ventana comenzó en 1 segmento; `cwnd` creció con los ACKs y se mantuvo en slow start con `ssthresh = None`.
+Se probaron 100 B y 2048 B porque el enunciado menciona ambos tamaños. Se hicieron cinco repeticiones por modo, con MSS de 8 bytes, timeout de 0,5 s y pérdida simulada del 20% en datos y ACKs, excluyendo handshake y cierre.
 
-Con pérdidas se observaron timeouts: `ssthresh` pasó a la mitad de la `cwnd` anterior, `cwnd` volvió a 8 bytes y la ventana a 1 segmento. Al alcanzar el umbral se pasó a congestion avoidance. Las pruebas comprobaron los valores y cambios de estado después de cada evento. El debug registra `cwnd`, `window_size`, estado y `ssthresh`.
-
-### Comparación con 20% de pérdida
-
-El enunciado menciona tanto 100 B como más de 1000 B, por lo que se probaron 100 B y 2048 B, cinco veces por modo. Se configuró un timeout de 0,5 s y una probabilidad de pérdida del 20% por envío de datos y ACKs, usando semillas reproducibles. Esta es una probabilidad, no una proporción exacta de descartes en cada ejecución. No se indujeron pérdidas durante el handshake ni el cierre.
-
-El tiempo corresponde a la ejecución de `send`, incluyendo retransmisiones y debug, pero excluyendo conexión y cierre. Los mensajes contados son intentos de envío de segmentos de datos y ACKs, incluyendo retransmisiones y envíos descartados; no incluyen handshake ni cierre. Ambos modos usaron bloques de datos de 8 bytes. Sin control, la ventana permaneció fija en 8 segmentos.
+Se midió el tiempo de `send`, incluyendo retransmisiones y debug. Los mensajes cuentan intentos de envío de datos y ACKs, incluidos los descartados y retransmitidos.
 
 | Archivo | Control de congestión | Tiempo promedio (s) | Mensajes promedio |
 |---|---|---:|---:|
-| 100 B | Sí | 2.659 | 43.8 |
-| 100 B | No | 2.042 | 60.4 |
-| 2048 B | Sí | 42.954 | 802.0 |
-| 2048 B | No | 32.505 | 1372.0 |
+| 100 B | Sí | 3.082 | 47.6 |
+| 100 B | No | 2.134 | 68.4 |
+| 2048 B | Sí | 42.052 | 790.6 |
+| 2048 B | No | 29.137 | 1267.2 |
 
-Para el archivo de más de 1000 B, Go-Back-N sin control fue más rápido en promedio, pero intercambió más mensajes. Con control, la reducción de ventana después de los timeouts limitó las retransmisiones, a costa de un mayor tiempo de envío. Para 100 B también fue más rápido sin control en promedio, aunque hubo variación entre repeticiones. Estos resultados corresponden a esta implementación en localhost, sin congestión real ni retardo artificial, y no establecen qué modo será más rápido en cualquier red.
+**Sin control se transmitió más rápido; con control se enviaron menos mensajes.** La reducción de ventana tras los timeouts limita las retransmisiones, pero aumenta el tiempo de envío. Estos resultados corresponden a localhost sin congestión real ni retardo artificial.
 
-Las pruebas revelaron un caso de bloqueo cuando se perdía el último ACK y la ventana se reducía: al esperar el cierre, el receptor no confirmaba duplicados anteriores al último segmento recibido. Se corrigió para repetir el último ACK acumulativo ante esos duplicados y se añadió una prueba de regresión.
+Para 2048 B, el control redujo los mensajes un **38%**, pero aumentó el tiempo un **44%**.
 
-Evidencia: `resultados_pruebas.csv` contiene las 21 ejecuciones y `debug_pruebas.txt` registra la evolución de las ventanas y las pérdidas inducidas. Para repetir las pruebas: `python -B pruebas.py`. Las pérdidas se simulan dentro del programa; no se modificó la configuración de red del computador.
+Evidencia: [resultados Linux](resultados_pruebas_linux.csv) y [trazas de debug](debug_pruebas_linux.txt).
