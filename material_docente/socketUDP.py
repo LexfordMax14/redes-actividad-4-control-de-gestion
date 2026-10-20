@@ -67,7 +67,7 @@ class SocketUDP:
         :return: None
         """
         if number_of_timers == 0:
-            return 
+            return
         # si faltan timers se añaden
         while len(self.timer_list) < number_of_timers:
             self.timer_list.append(None)
